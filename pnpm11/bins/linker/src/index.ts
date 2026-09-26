@@ -363,7 +363,8 @@ async function linkBin (cmd: CommandInfo, binsDir: string, opts: LinkBinOptions 
     ? opts.projectModulesDir
     : undefined
   const binNodePaths = opts.extraNodePaths?.length || opts.projectModulesDir != null
-    ? await getBinNodePaths(cmd.path, opts.projectModulesDir)
+    ? (await getBinNodePaths(cmd.path, opts.projectModulesDir)).filter((nodePath) =>
+      projectNodePath != null || !isSameNodePath(nodePath, opts.projectModulesDir))
     : []
   const shimNodePath = Array.from(new Set([
     ...(projectNodePath ? [projectNodePath] : []),
@@ -496,6 +497,15 @@ async function linkBin (cmd: CommandInfo, binsDir: string, opts: LinkBinOptions 
   if (EXECUTABLE_SHEBANG_SUPPORTED) {
     await ensureExecutableIfNeeded(cmd.path, { allowMissing: true })
   }
+}
+
+function isSameNodePath (left: string, right: string | undefined): boolean {
+  if (right == null) return false
+  const normalizedLeft = normalizePath(left)
+  const normalizedRight = normalizePath(right)
+  return IS_WINDOWS
+    ? normalizedLeft.toLowerCase() === normalizedRight.toLowerCase()
+    : normalizedLeft === normalizedRight
 }
 
 // The target marker does not describe the header, so a shim whose target has
