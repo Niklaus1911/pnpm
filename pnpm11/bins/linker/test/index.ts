@@ -106,7 +106,7 @@ test('linkBins() skips bins that already reference the correct target', async ()
   expect(fs.readFileSync(binLocation, 'utf8')).toBe(sentinel)
 })
 
-test('linkBins() puts projectModulesDir first on NODE_PATH, then the bin\'s own directories, then extraNodePaths', async () => {
+test('linkBins() puts a custom projectModulesDir first on NODE_PATH, then the bin\'s own directories, then extraNodePaths', async () => {
   const warn = jest.fn()
   const modulesDir = path.join(f.prepare('simple-fixture'), 'node_modules')
   const hoisted = path.join(modulesDir, '.pnpm', 'node_modules')
@@ -124,8 +124,8 @@ test('linkBins() puts projectModulesDir first on NODE_PATH, then the bin\'s own 
   await linkBins(modulesDir, dedupedTarget, { warn, extraNodePaths: [realModulesDir], projectModulesDir: realModulesDir })
   const deduped = nodePathEntries(fs.readFileSync(path.join(dedupedTarget, 'simple'), 'utf8'))
   expect(deduped).toHaveLength(2)
-  expect(deduped[0]).toBe(nodePathEntries(fs.readFileSync(path.join(binTarget, 'simple'), 'utf8'))[2])
-  expect(deduped[1]).toMatch(/\/node_modules\/simple\/node_modules$/)
+  expect(deduped[0]).toBe(nodePathEntries(fs.readFileSync(path.join(binTarget, 'simple'), 'utf8'))[1])
+  expect(deduped[1]).toMatch(/\/node_modules$/)
 
   fs.appendFileSync(path.join(dedupedTarget, 'simple'), '# sentinel\n')
   await linkBins(modulesDir, dedupedTarget, { warn, extraNodePaths: [realModulesDir], projectModulesDir: realModulesDir })
@@ -153,9 +153,13 @@ test('linkBins() keeps or rewrites the NODE_PATH of an existing bin according to
   expect(withProject.kept).toBe(false)
   expect(withProject.entries[0]).toMatch(/\/vendor$/)
   expect(await relink({ extraNodePaths, projectModulesDir })).toMatchObject({ kept: true })
-  expect(await relink({ projectModulesDir })).toMatchObject({ kept: true })
-  expect(await relink({ extraNodePaths })).toMatchObject({ kept: true })
-  expect(await relink({})).toMatchObject({ kept: true, entries: withProject.entries })
+  const projectOnly = await relink({ projectModulesDir })
+  expect(projectOnly.kept).toBe(false)
+  expect(projectOnly.entries[0]).toMatch(/\/vendor$/)
+  const extraOnly = await relink({ extraNodePaths })
+  expect(extraOnly.kept).toBe(false)
+  expect(extraOnly.entries[0]).toMatch(/\/node_modules\/simple\/node_modules$/)
+  expect(await relink({})).toMatchObject({ kept: true, entries: extraOnly.entries })
 
   expect(await relink({ extraNodePaths: [] })).toStrictEqual({ kept: false, entries: [] })
 

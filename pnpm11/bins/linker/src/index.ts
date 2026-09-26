@@ -359,6 +359,17 @@ export interface LinkBinOptions {
 
 async function linkBin (cmd: CommandInfo, binsDir: string, opts: LinkBinOptions & { physicalBinsDir: string }): Promise<void> {
   const externalBinPath = path.join(binsDir, cmd.name)
+  const projectNodePath = opts.projectModulesDir != null && path.basename(opts.projectModulesDir) !== 'node_modules'
+    ? opts.projectModulesDir
+    : undefined
+  const binNodePaths = opts.extraNodePaths?.length || opts.projectModulesDir != null
+    ? await getBinNodePaths(cmd.path, opts.projectModulesDir)
+    : []
+  const shimNodePath = Array.from(new Set([
+    ...(projectNodePath ? [projectNodePath] : []),
+    ...binNodePaths,
+    ...opts.extraNodePaths ?? [],
+  ]))
   const shShimDir = await getShShimDir(cmd.path, externalBinPath, { physicalDir: opts.physicalBinsDir })
   // Not writing a PowerShell shim is not enough to keep one out of the bin
   // directory: an install that did want one leaves it behind, and PowerShell
@@ -391,12 +402,11 @@ async function linkBin (cmd: CommandInfo, binsDir: string, opts: LinkBinOptions 
         isShimBasedirAnchorCurrent(content, path.relative(binsDir, cmd.path)) &&
         isRelativeTargetCurrent &&
         (
-          (opts.extraNodePaths == null && opts.projectModulesDir == null) ||
-          isShimNodePath(content, {
-            first: opts.projectModulesDir,
-            // The shim lists every entry once, at its first position.
-            last: opts.extraNodePaths && Array.from(new Set(opts.extraNodePaths)).filter((p) => p !== opts.projectModulesDir),
-          })
+          (opts.extraNodePaths == null && projectNodePath == null && opts.projectModulesDir == null) ||
+            isShimNodePath(content, {
+              first: shimNodePath[0],
+              last: shimNodePath.slice(1),
+            })
         )
     }
   } catch {}
@@ -461,18 +471,9 @@ async function linkBin (cmd: CommandInfo, binsDir: string, opts: LinkBinOptions 
   }
 
   try {
-    let nodePath: string[] | undefined
-    if (opts.extraNodePaths?.length || opts.projectModulesDir) {
-      const binNodePaths = await getBinNodePaths(cmd.path, opts.projectModulesDir)
-      nodePath = Array.from(new Set([
-        ...(opts.projectModulesDir ? [opts.projectModulesDir] : []),
-        ...binNodePaths,
-        ...opts.extraNodePaths ?? [],
-      ]))
-    }
     await cmdShim(cmd.path, externalBinPath, {
       createPwshFile: POWER_SHELL_IS_SUPPORTED && cmd.makePowerShellShim,
-      nodePath,
+      nodePath: shimNodePath.length > 0 ? shimNodePath : undefined,
       nodeExecPath: cmd.nodeExecPath,
       shShimDir,
     })

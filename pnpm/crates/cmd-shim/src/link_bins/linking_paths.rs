@@ -142,12 +142,14 @@ pub(super) fn shim_node_path(
     if project_node_path.is_none() && extra_node_paths.is_empty() {
         return Vec::new();
     }
+    let project_node_path_for_shim =
+        project_node_path.filter(|path| !Path::new(path).ends_with("node_modules"));
     let own = if should_include_package_node_paths(project_node_path, extra_node_paths) {
         package_node_paths(pkg)
     } else {
         Vec::new()
     };
-    merge_node_paths(project_node_path, own, extra_node_paths)
+    merge_node_paths(project_node_path_for_shim, own, extra_node_paths)
 }
 
 fn should_include_package_node_paths(
